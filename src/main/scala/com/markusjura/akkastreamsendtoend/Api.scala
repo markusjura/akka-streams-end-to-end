@@ -51,16 +51,32 @@ object Api extends Logging {
       ageProcessor: Processor[AgeCalculatorProcess.Request,
                               AgeCalculatorProcess.Response]
   )(implicit untypedSystem: UntypedSystem, mat: Materializer): Unit = {
+    import Processor.processorUnavailableHandler
     import config._
     import untypedSystem.dispatcher
 
     implicit val scheduler: Scheduler = untypedSystem.scheduler
 
-    // TODO: Start Akka HTTP server
-    // TODO: Register CoordinatedShutdown phase to unbind HTTP server
-    // TODO: Use HTTP exception handler for messages that cannot be processed due to high load
+    Http()
+      .bindAndHandle(
+        route(ageProcessor, ageProcessorTimeout),
+        address,
+        port
+      )
+      .onComplete {
+        case Failure(cause) =>
+          logger.error(s"Shutting down, because cannot bind to $address:$port!",
+            cause)
+          CoordinatedShutdown(untypedSystem).run(BindFailure)
 
-    ???
+        case Success(binding) =>
+          logger.info(
+            s"Listening for HTTP connections on ${binding.localAddress}")
+          CoordinatedShutdown(untypedSystem)
+            .addTask(PhaseServiceUnbind, "api.unbind") { () =>
+              binding.terminate(terminationDeadline).map(_ => Done)
+            }
+      }
   }
 
   def route(
@@ -77,13 +93,20 @@ object Api extends Logging {
       get {
         complete(OK)
       } ~
-      post {
-        entity(as[Request]) {
-          // TODO: Implement HTTP endpoint: POST localhost:8080 question='What is the time'
-          //       Endpoint should call the age processor
-          ???
+        post {
+          entity(as[Request]) {
+            case Request(question) if question.isEmpty =>
+              logger.warn("Bad Request. Question is empty.")
+              complete(StatusCodes.BadRequest -> "Question is empty")
+
+            case Request(question) =>
+              onSuccess(
+                ageProcessor.process(
+                  AgeCalculatorProcess.Request(question), ageProcessorTimeout)) { response =>
+                complete(StatusCodes.Created -> response.answer)
+              }
+          }
         }
-      }
     }
     // format: on
   }
