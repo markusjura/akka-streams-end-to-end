@@ -42,7 +42,7 @@ object AgeCalculatorProcess extends Logging {
     * examples for such stages are calls to external services (e.g. via HTTP or gRPC) or interacting
     * with actors in a request-response way (via the ask pattern).
     *
-    * The value 1 for the `parallelism` of `mapAsync` is chosen for demonstration purposes only: it
+    * The value 1 for the `parallelism` of `mapAsync` is chosen for demonstration purposes only: It
     * allows for easily showing the effect of backpressure. For real-world applications usually a
     * higher value would be suitable.
     */

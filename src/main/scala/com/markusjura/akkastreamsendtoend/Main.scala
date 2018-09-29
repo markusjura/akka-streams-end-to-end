@@ -43,10 +43,27 @@ object Main extends Logging {
     val systemName = "akka-streams-end-to-end"
     val config = loadConfigOrThrow[Config](systemName) // Must be first!
 
-    // TODO: Create the actor system
+    ActorSystem(Main(config), systemName)
   }
 
   def apply(config: Config): Behavior[NotUsed] =
-    // TODO: Implement Akka Typed startup logic
-    ???
+    Behaviors.setup { context =>
+      logger.info(s"${context.system.name} is starting up")
+
+      implicit val system: ActorSystem[_] = context.system
+      implicit val untypedSystem: UntypedSystem = context.system.toUntyped
+      implicit val mat: Materializer = ActorMaterializer()(context.system)
+      implicit val ec: ExecutionContext = context.executionContext
+      implicit val scheduler: Scheduler = context.system.scheduler
+
+      val ageProcessor =
+        Processor(AgeCalculatorProcess(), "age-processor")(_.correlationId,
+          _.correlationId)
+
+      Api(config.api, ageProcessor)
+
+      logger.info(s"${context.system.name} has been started")
+
+      Behaviors.empty
+    }
 }
