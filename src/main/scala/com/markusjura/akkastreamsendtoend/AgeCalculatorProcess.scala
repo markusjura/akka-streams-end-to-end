@@ -30,9 +30,9 @@ import scala.concurrent.duration.DurationInt
 object AgeCalculatorProcess extends Logging {
 
   final case class Request(question: String,
-                           correlationId: UUID = UUID.randomUUID()) {}
+    correlationId: UUID = UUID.randomUUID()) {}
   final case class Response(answer: String,
-                            correlationId: UUID = UUID.randomUUID())
+    correlationId: UUID = UUID.randomUUID())
 
   /**
     * Simple domain logic process for demo purposes.
@@ -47,17 +47,24 @@ object AgeCalculatorProcess extends Logging {
     * higher value would be suitable.
     */
   def apply()(implicit ec: ExecutionContext,
-              scheduler: Scheduler): Flow[Request, Response, NotUsed] =
-    // TODO: Implement Akka Streams flow by calling executing the steps:
-    //       1. calculateAge
-    //       2. wrapText
-    ???
+    scheduler: Scheduler): Flow[Request, Response, NotUsed] =
+    Flow[Request]
+      .mapAsync(1) {
+        case request @ Request(question, _) =>
+          calculateAge(question)
+            .map(age => request -> age)
+      }
+      .mapAsync(1) {
+        case (request, age) =>
+          wrapText(age)
+            .map(text => Response(text, request.correlationId))
+      }
 
   /**
     * Step that calculates the age based on the length of the question.
     */
   def calculateAge(question: String)(implicit ec: ExecutionContext,
-                                     scheduler: Scheduler): Future[Int] =
+    scheduler: Scheduler): Future[Int] =
     after(1.second, scheduler) {
       Future.successful(question.length)
     }
@@ -66,7 +73,7 @@ object AgeCalculatorProcess extends Logging {
     * Step that wraps the age into a response text.
     */
   def wrapText(age: Int)(implicit ec: ExecutionContext,
-                         scheduler: Scheduler): Future[String] =
+    scheduler: Scheduler): Future[String] =
     after(1.second, scheduler) {
       Future.successful(s"I am $age years old")
     }
